@@ -1,0 +1,15 @@
+Components:
+1. Kernel module: responsible for reading syscall table and computing a checksum (SHA1 or MD5?)
+2. User-space program: read the checksum from kernel module and compare to baseline checksum for intrusion detection
+3. Baseline checksum: store baseline syscall table checksum in a file (secure database would be better)
+
+Flow:
+1. Upon installation, initialize baseline checksum for syscall table and store in file/database
+2. At fixed timesteps, read current syscall table checksum from kernel module. Compare to baseline checksum 
+3. If intrusion is detected, start trapping critical syscalls (execve, etc.) and alert user/administrator
+
+(we could potentially make the list of critical syscalls configurable at install time)
+
+- something to think about: how will we prevent the HIDS itself from being tampered with?
+
+source: https://en.wikipedia.org/wiki/Host-based_intrusion_detection_system
