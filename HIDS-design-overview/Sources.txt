@@ -1,5 +1,6 @@
 https://sysdig.com/learn-cloud-native/what-is-hids/
 https://en.wikipedia.org/wiki/Host-based_intrusion_detection_system
 https://www.infosecinstitute.com/resources/general-security/hids-simplified-design-construct-2/
+https://www.secureideas.com/blog/2020/using-ldpreload-to-hijack-rand.html
 
 ptrace and syscall handling: https://www.linuxjournal.com/article/6100

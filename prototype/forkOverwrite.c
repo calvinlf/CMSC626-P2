@@ -25,7 +25,7 @@ void __attribute__((constructor)) backdoor_initalize() {
 
 // Our version of fork
 pid_t fork(void) {
-    printf("Here\n");
+    printf("If this shows up, our fork is running\n");
     pid_t temp = real_fork();
     return temp;
 }
