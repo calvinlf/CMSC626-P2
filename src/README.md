@@ -12,9 +12,9 @@ From the src folder run the following commands:
 
 Test that our shared library was built:
 
-- `ls forkOverwrite.so`
+- `ls monitor.so`
 
 Run the test file:
 
-- `LD_PRELOAD=./forkOverwrite.so ./targetProcess`
+- `LD_PRELOAD=./monitor.so ./targetProcess`
 
