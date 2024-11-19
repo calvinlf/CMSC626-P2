@@ -13,6 +13,11 @@
 #define NC "\033[0m"
 #define BLUE "\033[0;34m"
 
+// what database to send to - baseline or monitoring
+// the idea is that we set it to baseline upon system initialization
+// then after populating the database, switch to monitoring mode and recompile.
+#define MONITOR_MODE "baseline"
+
 // function pointers to the real functions (definitions via manpages)
 static pid_t (*real_fork)(void) = NULL;
 static int (*real_open)(const char *pathname, int flags, ...) = NULL;
@@ -84,8 +89,19 @@ void log_syscall(char *syscall_name){
     get_process_name(pid, process_name);
 
     printf("[%ld] PID: %d, Process: %s, Syscall: %s\n", timestamp, pid, process_name, syscall_name);
-    // to-do send to db
-    // need a mechanism for determining whether to send to baseline db or monitoring db.
+    
+    // send json payload to backend
+    // backend will insert into db as well as analyze for anomalies
+    char json_payload[1024];
+    snprintf(json_payload, sizeof(json_payload), "{\"timestamp\": %ld, \"pid\": %d, \"process\": \"%s\", \"syscall\": \"%s\"}", timestamp, pid, process_name, syscall_name);
+    const char *url = (strcmp(MONITOR_MODE, "baseline") == 0) ? "http://localhost:5000/baseline" : "http://localhost:5000/monitoring";
+    send_to_backend(url, json_payload);
+}
+
+// utility function to send json payload to backend
+void send_to_backend(const char *url, const char *json_payload){
+    // send json payload to backend
+    // to-do
 }
 
 // monitoring hooks
