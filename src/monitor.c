@@ -9,6 +9,7 @@
 #include <time.h>         // timestamp
 #include <string.h>
 #include <execinfo.h>     // backtrace
+#include <curl/curl.h>
 
 // debug output colors
 #define GREEN "\033[0;32m"
@@ -19,6 +20,9 @@
 // the idea is that we set it to baseline upon system initialization
 // then after populating the database, switch to monitoring mode and recompile.
 #define MONITOR_MODE "baseline"
+
+// flag to indicate if we are in monitoring mode. prevents infinite recursions
+static int in_monitoring = 0;
 
 // function pointers to the real functions (definitions via manpages)
 static pid_t (*real_fork)(void) = NULL;
@@ -103,9 +107,32 @@ void get_call_stack_sequence (char *stack_buffer, size_t buffer_size){
 }
 
 // utility function to send json payload to backend
+// https://curl.se/libcurl/c/http-post.html
 void send_to_backend(const char *url, const char *json_payload){
-    // send json payload to backend
-    // to-do
+    CURL *curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
+
+    if (curl){
+        curl_easy_setopt(curl, CURLOPT_URL, url);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload);
+
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+        res = curl_easy_perform(curl);
+
+        if (res != CURLE_OK){
+            fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        }
+
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+    }
+    curl_global_cleanup();
 }
 
 // utility function to log syscall to database
@@ -118,17 +145,17 @@ void log_syscall(char *syscall_name){
     char process_name[256];
     get_process_name(pid, process_name);
 
-    char stack_trace[2048];
-    get_call_stack_sequence(stack_trace, sizeof(stack_trace));
+    char call_stack[2048];
+    get_call_stack_sequence(call_stack, sizeof(call_stack));
 
     printf("[%ld] PID: %d, Process: %s, Syscall: %s\n", timestamp, pid, process_name, syscall_name);
-    printf("Call Stack: %s\n", stack_trace);
+    printf("Call Stack: %s\n", call_stack);
     
     // send json payload to backend
     // backend will insert into db as well as analyze for anomalies
     char json_payload[1024];
-    snprintf(json_payload, sizeof(json_payload), "{\"timestamp\": %ld, \"pid\": %d, \"process\": \"%s\", \"syscall\": \"%s\"}", timestamp, pid, process_name, syscall_name);
-    const char *url = (strcmp(MONITOR_MODE, "baseline") == 0) ? "http://localhost:5000/baseline" : "http://localhost:5000/monitoring";
+    snprintf(json_payload, sizeof(json_payload), "{\"timestamp\": %ld, \"pid\": %d, \"process\": \"%s\", \"syscall\": \"%s\", \"call_stack\": \"%s\"}", timestamp, pid, process_name, syscall_name, call_stack);
+    const char *url = (strcmp(MONITOR_MODE, "baseline") == 0) ? "http://host.docker.internal:8080/baseline-log" : "http://host.docker.internal:8080/monitor-log";
     send_to_backend(url, json_payload);
 }
 
@@ -140,26 +167,50 @@ pid_t fork(void) {
 }
 
 int open(const char *pathname, int flags, ...) {
+    if (in_monitoring){
+        return real_open(pathname, flags);
+    }
+
+    in_monitoring = 1;
     log_syscall("open");
     int temp = real_open(pathname, flags);
+    in_monitoring = 0;
     return temp;
 }
 
 ssize_t read(int fd, void *buf, size_t count) {
+    if (in_monitoring){
+        return real_read(fd, buf, count);
+    }
+
+    in_monitoring = 1;
     log_syscall("read");
     ssize_t bytes_read = real_read(fd, buf, count);
+    in_monitoring = 0;
     return bytes_read;
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
+    if (in_monitoring){
+        return real_write(fd, buf, count);
+    }
+
+    in_monitoring = 1;
     log_syscall("write");
     ssize_t bytes_written = real_write(fd, buf, count);
+    in_monitoring = 0;
     return bytes_written;
 }
 
 int close(int fd) {
+    if(in_monitoring){
+        return real_close(fd);
+    }
+
+    in_monitoring = 1;
     log_syscall("close");
     int temp = real_close(fd);
+    in_monitoring = 0;
     return temp;
 }
 
