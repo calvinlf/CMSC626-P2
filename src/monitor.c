@@ -1,7 +1,6 @@
 #define _GNU_SOURCE       // Needed for RTLD_NEXT
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <unistd.h>       // fork
 #include <dlfcn.h>        // dlsym
 #include <sys/stat.h>     // open
@@ -89,6 +88,7 @@ void get_call_stack_sequence (char *stack_buffer, size_t buffer_size){
     void *array[10];
     char **strings;
     int size, i;
+    int start_collecting = 0; // dont collect until monitor.so calls are skipped
 
     size = backtrace(array, 10);
     strings = backtrace_symbols(array, size);
@@ -96,10 +96,17 @@ void get_call_stack_sequence (char *stack_buffer, size_t buffer_size){
         //printf ("Obtained %d stack frames.\n", size);
         stack_buffer[0] = '\0';
         for (i = 0; i < size; i++) {
-            size_t len = strnlen(strings[i], buffer_size - 1);
-            strncat(stack_buffer, strings[i], buffer_size - 1);
-            strncat(stack_buffer, "; ", buffer_size - 1);
-            buffer_size -= len + 2;
+            if (strstr(strings[i], "monitor.so") != NULL) {
+                start_collecting = 1; // collect only after skipping monitor.so calls
+                continue;
+            }
+
+            if (start_collecting) {
+                size_t len = strnlen(strings[i], buffer_size - 1);
+                strncat(stack_buffer, strings[i], buffer_size - 1);
+                strncat(stack_buffer, "; ", buffer_size - 1);
+                buffer_size -= len + 2;
+            }
         }
     }
 
