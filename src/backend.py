@@ -8,7 +8,7 @@ app = Flask(__name__)
 # testing route
 @app.route('/', methods=["GET"])
 def home():
-    return "backend server running on port {PORT}\n"
+    return f"backend server running on port {PORT}\n"
 
 # mongodb connection
 client = MongoClient("mongodb://localhost:27017/")

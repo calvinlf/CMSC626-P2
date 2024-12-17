@@ -1,5 +1,6 @@
 #define _GNU_SOURCE       // Needed for RTLD_NEXT
 #include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 #include <unistd.h>       // fork
 #include <dlfcn.h>        // dlsym
@@ -7,6 +8,7 @@
 #include <fcntl.h>        // open
 #include <time.h>         // timestamp
 #include <string.h>
+#include <execinfo.h>     // backtrace
 
 // debug output colors
 #define GREEN "\033[0;32m"
@@ -78,6 +80,34 @@ static void get_process_name(const pid_t pid, char * name) {
     }
 }
 
+// https://www.gnu.org/software/libc/manual/html_node/Backtraces.html
+void get_call_stack_sequence (char *stack_buffer, size_t buffer_size){
+    void *array[10];
+    char **strings;
+    int size, i;
+
+    size = backtrace(array, 10);
+    strings = backtrace_symbols(array, size);
+    if (strings != NULL){
+        //printf ("Obtained %d stack frames.\n", size);
+        stack_buffer[0] = '\0';
+        for (i = 0; i < size; i++) {
+            size_t len = strnlen(strings[i], buffer_size - 1);
+            strncat(stack_buffer, strings[i], buffer_size - 1);
+            strncat(stack_buffer, "; ", buffer_size - 1);
+            buffer_size -= len + 2;
+        }
+    }
+
+    free(strings);
+}
+
+// utility function to send json payload to backend
+void send_to_backend(const char *url, const char *json_payload){
+    // send json payload to backend
+    // to-do
+}
+
 // utility function to log syscall to database
 // we care about the sequence of syscalls per process;
 // this way we can detect if a specific process is making abnormal syscalls
@@ -88,7 +118,11 @@ void log_syscall(char *syscall_name){
     char process_name[256];
     get_process_name(pid, process_name);
 
+    char stack_trace[2048];
+    get_call_stack_sequence(stack_trace, sizeof(stack_trace));
+
     printf("[%ld] PID: %d, Process: %s, Syscall: %s\n", timestamp, pid, process_name, syscall_name);
+    printf("Call Stack: %s\n", stack_trace);
     
     // send json payload to backend
     // backend will insert into db as well as analyze for anomalies
@@ -96,12 +130,6 @@ void log_syscall(char *syscall_name){
     snprintf(json_payload, sizeof(json_payload), "{\"timestamp\": %ld, \"pid\": %d, \"process\": \"%s\", \"syscall\": \"%s\"}", timestamp, pid, process_name, syscall_name);
     const char *url = (strcmp(MONITOR_MODE, "baseline") == 0) ? "http://localhost:5000/baseline" : "http://localhost:5000/monitoring";
     send_to_backend(url, json_payload);
-}
-
-// utility function to send json payload to backend
-void send_to_backend(const char *url, const char *json_payload){
-    // send json payload to backend
-    // to-do
 }
 
 // monitoring hooks
