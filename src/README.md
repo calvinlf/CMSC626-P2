@@ -22,5 +22,8 @@ In your docker container, you can verify the connection:
 Build the baseline repository
 - `python3 build_baseline_repo.py`
 
+Run a performance evaluation
+- `python3 performance_evaluation.py`
+
 Run the shared library on a process (example: cat etc/passwd):
 - `LD_PRELOAD=./monitor.so cat etc/passwd`
