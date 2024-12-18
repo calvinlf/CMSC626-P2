@@ -4,8 +4,11 @@ LD_PRELOAD_PATH = "./monitor.so"
 
 # list of commands to build our repo with
 COMMANDS = [
+    "cat /etc/*",
     "cat /etc/passwd",
+    "cat /proc/cpuinfo",
     "ls -l /etc",
+    "ls -a /home",
     "cp /etc/passwd /tmp/test_passwd",
     "echo 'hello world' > /tmp/testfile.txt",
     "echo 'hello again world' >> /tmp/testfile.txt",
