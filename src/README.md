@@ -22,11 +22,14 @@ In your docker container, you can verify the connection:
 Build the baseline repository
 - `python3 build_baseline_repo.py`
 
-Run a performance evaluation
-- `python3 performance_evaluation.py`
-
 Root user/admin can set monitoring mode using environment vars:
 - `export MONITOR_MODE=monitoring` or `export MONITOR_MODE=baseline` (defaults to baseline)
 
-Run the shared library on a process (example: cat etc/passwd):
+Run a performance evaluation
+- `python3 performance_evaluation.py`
+
+Test run for the shared library on a process (example: cat etc/passwd):
 - `LD_PRELOAD=./monitor.so cat etc/passwd`
+
+Set LD_PRELOAD envvar to have it persist
+- `export LD_PRELOAD=./monitor.so`

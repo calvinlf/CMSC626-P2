@@ -35,4 +35,3 @@ def execute_commands():
 
 if __name__ == "__main__":
     execute_commands()
-    print("baseline repo built successfully")

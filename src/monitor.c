@@ -30,14 +30,16 @@ const char* get_monitor_mode() {
         if (strcmp(mode, "monitoring") == 0 || strcmp(mode, "baseline") == 0) {
             return mode;
         } else {
-            fprintf(stderr, "invalid MONITOR_MODE value: '%s'. allowed values are 'monitoring' or 'baseline' -  defaulting to 'baseline'.\n", mode);
+            fprintf(stderr, "invalid MONITOR_MODE value: '%s'. allowed values are 'monitoring' or 'baseline' -  defaulting to 'monitoring'.\n", mode);
         }
     }
-    return "baseline";
+    return "monitoring";
 }
 
-// flag to indicate if we are in monitoring mode. prevents infinite recursions
-static int in_monitoring = 0;
+static int is_monitoring_mode = 0;
+
+// flag to indicate if we are in a syscall called by original process (not by us). prevents infinite recursions
+static int in_syscall = 0;
 
 // function pointers to the real functions (definitions via manpages)
 static pid_t (*real_fork)(void) = NULL;
@@ -60,21 +62,28 @@ void __attribute__((constructor)) backdoor_initalize() {
     real_write = dlsym(RTLD_NEXT, "write");
     real_close = dlsym(RTLD_NEXT, "close");
     real_execve = dlsym(RTLD_NEXT, "execve");
+
+    const char *mode = get_monitor_mode();
+    if (strcmp(mode, "monitoring") == 0) {
+        is_monitoring_mode = 1;
+    }
   
-    printf(" [%s+%s] %sBACKDOOR: Backdoors Loaded!\n%s",
-           GREEN, NC, GREEN, NC);
-    printf(" [%s+%s] %sBACKDOOR: Real fork() addr: %s%p%s\n",
-           GREEN, NC, GREEN, BLUE, real_fork, NC);
-    printf(" [%s+%s] %sBACKDOOR: Real open() addr: %s%p%s\n",
-           GREEN, NC, GREEN, BLUE, real_open, NC);
-    printf(" [%s+%s] %sBACKDOOR: Real read() addr: %s%p%s\n",
-           GREEN, NC, GREEN, BLUE, real_read, NC);
-    printf(" [%s+%s] %sBACKDOOR: Real write() addr: %s%p%s\n",
-           GREEN, NC, GREEN, BLUE, real_write, NC);
-    printf(" [%s+%s] %sBACKDOOR: Real close() addr: %s%p%s\n",
-           GREEN, NC, GREEN, BLUE, real_close, NC);
-    printf(" [%s+%s] %sBACKDOOR: Real execve() addr: %s%p%s\n",
-           GREEN, NC, GREEN, BLUE, real_execve, NC);
+    if (!is_monitoring_mode) {
+        printf(" [%s+%s] %sBACKDOOR: Backdoors Loaded!\n%s",
+            GREEN, NC, GREEN, NC);
+        printf(" [%s+%s] %sBACKDOOR: Real fork() addr: %s%p%s\n",
+            GREEN, NC, GREEN, BLUE, real_fork, NC);
+        printf(" [%s+%s] %sBACKDOOR: Real open() addr: %s%p%s\n",
+            GREEN, NC, GREEN, BLUE, real_open, NC);
+        printf(" [%s+%s] %sBACKDOOR: Real read() addr: %s%p%s\n",
+            GREEN, NC, GREEN, BLUE, real_read, NC);
+        printf(" [%s+%s] %sBACKDOOR: Real write() addr: %s%p%s\n",
+            GREEN, NC, GREEN, BLUE, real_write, NC);
+        printf(" [%s+%s] %sBACKDOOR: Real close() addr: %s%p%s\n",
+            GREEN, NC, GREEN, BLUE, real_close, NC);
+        printf(" [%s+%s] %sBACKDOOR: Real execve() addr: %s%p%s\n",
+            GREEN, NC, GREEN, BLUE, real_execve, NC);
+    }
 }
 
 // utility function to get the current timestamp
@@ -141,6 +150,8 @@ void send_to_backend(const char *url, const char *json_payload){
     if (curl){
         curl_easy_setopt(curl, CURLOPT_URL, url);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json_payload);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, fopen("/dev/null", "w"));
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
 
         struct curl_slist *headers = NULL;
         headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -148,7 +159,7 @@ void send_to_backend(const char *url, const char *json_payload){
 
         res = curl_easy_perform(curl);
 
-        if (res != CURLE_OK){
+        if (res != CURLE_OK && !is_monitoring_mode){
             fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
         }
 
@@ -171,8 +182,10 @@ void log_syscall(char *syscall_name){
     char call_stack[2048];
     get_call_stack_sequence(call_stack, sizeof(call_stack));
 
-    printf("[%ld] PID: %d, Process: %s, Syscall: %s\n", timestamp, pid, process_name, syscall_name);
-    printf("Call Stack: %s\n", call_stack);
+    if (!is_monitoring_mode) {
+        printf("[%ld] PID: %d, process: %s, syscall: %s\n", timestamp, pid, process_name, syscall_name);
+        printf("call stack: %s\n", call_stack);
+    }
     
     // send json payload to backend
     // backend will insert into db as well as analyze for anomalies
@@ -190,50 +203,50 @@ pid_t fork(void) {
 }
 
 int open(const char *pathname, int flags, ...) {
-    if (in_monitoring){
+    if (in_syscall){
         return real_open(pathname, flags);
     }
 
-    in_monitoring = 1;
+    in_syscall = 1;
     log_syscall("open");
     int temp = real_open(pathname, flags);
-    in_monitoring = 0;
+    in_syscall = 0;
     return temp;
 }
 
 ssize_t read(int fd, void *buf, size_t count) {
-    if (in_monitoring){
+    if (in_syscall){
         return real_read(fd, buf, count);
     }
 
-    in_monitoring = 1;
+    in_syscall = 1;
     log_syscall("read");
     ssize_t bytes_read = real_read(fd, buf, count);
-    in_monitoring = 0;
+    in_syscall = 0;
     return bytes_read;
 }
 
 ssize_t write(int fd, const void *buf, size_t count) {
-    if (in_monitoring){
+    if (in_syscall){
         return real_write(fd, buf, count);
     }
 
-    in_monitoring = 1;
+    in_syscall = 1;
     log_syscall("write");
     ssize_t bytes_written = real_write(fd, buf, count);
-    in_monitoring = 0;
+    in_syscall = 0;
     return bytes_written;
 }
 
 int close(int fd) {
-    if(in_monitoring){
+    if(in_syscall){
         return real_close(fd);
     }
 
-    in_monitoring = 1;
+    in_syscall = 1;
     log_syscall("close");
     int temp = real_close(fd);
-    in_monitoring = 0;
+    in_syscall = 0;
     return temp;
 }
 
