@@ -25,5 +25,8 @@ Build the baseline repository
 Run a performance evaluation
 - `python3 performance_evaluation.py`
 
+Root user/admin can set monitoring mode using environment vars:
+- `export MONITOR_MODE=monitoring` or `export MONITOR_MODE=baseline` (defaults to baseline)
+
 Run the shared library on a process (example: cat etc/passwd):
 - `LD_PRELOAD=./monitor.so cat etc/passwd`

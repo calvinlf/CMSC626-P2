@@ -16,9 +16,25 @@
 #define BLUE "\033[0;34m"
 
 // what database to send to - baseline or monitoring
-// the idea is that we set it to baseline upon system initialization
-// then after populating the database, switch to monitoring mode and recompile.
-#define MONITOR_MODE "baseline"
+// root user sets environment variable MONITOR_MODE to "monitoring" or "baseline"
+const char* get_monitor_mode() {
+    const char *mode = getenv("MONITOR_MODE");
+
+    // only root user can change this value - https://stackoverflow.com/questions/4159910/check-if-user-is-root-in-c
+    if (geteuid() != 0) {
+        fprintf(stderr, "error: only the root user can set MONITOR_MODE\n");
+        return "baseline";
+    }
+
+    if (mode) {
+        if (strcmp(mode, "monitoring") == 0 || strcmp(mode, "baseline") == 0) {
+            return mode;
+        } else {
+            fprintf(stderr, "invalid MONITOR_MODE value: '%s'. allowed values are 'monitoring' or 'baseline' -  defaulting to 'baseline'.\n", mode);
+        }
+    }
+    return "baseline";
+}
 
 // flag to indicate if we are in monitoring mode. prevents infinite recursions
 static int in_monitoring = 0;
@@ -162,7 +178,7 @@ void log_syscall(char *syscall_name){
     // backend will insert into db as well as analyze for anomalies
     char json_payload[1024];
     snprintf(json_payload, sizeof(json_payload), "{\"timestamp\": %ld, \"pid\": %d, \"process\": \"%s\", \"syscall\": \"%s\", \"call_stack\": \"%s\"}", timestamp, pid, process_name, syscall_name, call_stack);
-    const char *url = (strcmp(MONITOR_MODE, "baseline") == 0) ? "http://host.docker.internal:8080/baseline-log" : "http://host.docker.internal:8080/monitor-log";
+    const char *url = (strcmp(get_monitor_mode(), "baseline") == 0) ? "http://host.docker.internal:8080/baseline-log" : "http://host.docker.internal:8080/monitor-log";
     send_to_backend(url, json_payload);
 }
 
