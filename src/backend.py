@@ -85,7 +85,7 @@ def anomaly_detected(log):
 
     # avg similarity of all baseline logs compared to current log, and proportion of new syscalls in current log
     average_similarity = total_similarity / similarity_count
-    total_new_syscalls = sum(all_new_syscalls)
+    total_new_syscalls = len(all_new_syscalls)
     new_syscall_proportion = total_new_syscalls / len(current_sequence)
 
     if average_similarity < similarity_threshold or new_syscall_proportion > new_syscall_threshold:

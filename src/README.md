@@ -31,5 +31,8 @@ Run a performance evaluation
 Test run for the shared library on a process (example: cat etc/passwd):
 - `LD_PRELOAD=./monitor.so cat etc/passwd`
 
-Set LD_PRELOAD envvar to have it persist
+Simulate infecting processes that make "read" syscalls (should be run only in monitoring mode):
+- `LD_PRELOAD="./monitor.so ./infect.so" cat /etc/passwd`
+
+Set LD_PRELOAD envvar to have it persist without needing to set it per process
 - `export LD_PRELOAD=./monitor.so`
